@@ -6,9 +6,20 @@ use std::io::{self};
 
 const PATH: &str = "./config.json";
 
+pub mod date_serializer {
+    use chrono::NaiveDate;
+    use serde::{de::Error, Deserialize, Deserializer};
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<NaiveDate, D::Error> {
+        let time: String = Deserialize::deserialize(deserializer)?;
+        Ok(NaiveDate::parse_from_str(&time, "%Y-%m-%d").map_err(D::Error::custom)?)
+    }
+}
+
 #[derive(Deserialize)]
 struct Config {
-    startweek: u32,
+    #[serde(with = "date_serializer")] // declaring custom deserializer
+    startdate: chrono::NaiveDate,
     caretakers: Vec<String>,
 }
 
@@ -29,20 +40,23 @@ fn get_config(path: &str) -> io::Result<Config> {
     }
 }
 
-fn get_current_caretaker_idx(schedule_start_week: u32, caretaker_count: u32) -> usize {
-    let week_number = chrono::Local::now().iso_week().week();
-    let caretaker_idx = (week_number - schedule_start_week) % caretaker_count;
+fn get_current_caretaker_idx(conf: &Config) -> usize {
+    let weeknumberofstart = conf.startdate.iso_week().week();
+    let currentweeknumber = chrono::Local::now().iso_week().week();
+
+    let diff = currentweeknumber - weeknumberofstart;
+    let caretaker_idx = diff % conf.caretakers.len() as u32;
     caretaker_idx as usize
 }
 
-fn get_current_caretaker(schedule_start_week: u32, caretakers: &Vec<String>) -> String {
-    let caretaker_idx = get_current_caretaker_idx(schedule_start_week, caretakers.len() as u32);
-    caretakers.get(caretaker_idx).unwrap().to_string()
+fn get_current_caretaker(conf: &Config) -> String {
+    let caretaker_idx = get_current_caretaker_idx(&conf);
+    conf.caretakers.get(caretaker_idx).unwrap().to_string()
 }
 
-fn get_next_weeks(conf: Config, weeks: u32) -> Vec<CareWeek> {
+fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
     let len = conf.caretakers.len();
-    let caretaker_idx = get_current_caretaker_idx(conf.startweek, len as u32);
+    let caretaker_idx = get_current_caretaker_idx(&conf);
     let mut caretaker_ordered = Vec::new();
     for i in caretaker_idx..(caretaker_idx + weeks as usize) {
         let idx = i % len;
@@ -53,8 +67,18 @@ fn get_next_weeks(conf: Config, weeks: u32) -> Vec<CareWeek> {
         .iter()
         .zip(current_week_number..)
         .map(|(caretaker, week)| {
-            let start = chrono::NaiveDate::from_isoywd_opt(chrono::Local::now().year(), week, chrono::Weekday::Mon).unwrap();
-            let end = chrono::NaiveDate::from_isoywd_opt(chrono::Local::now().year(), week, chrono::Weekday::Sun).unwrap();
+            let start = chrono::NaiveDate::from_isoywd_opt(
+                chrono::Local::now().year(),
+                week,
+                chrono::Weekday::Mon,
+            )
+            .unwrap();
+            let end = chrono::NaiveDate::from_isoywd_opt(
+                chrono::Local::now().year(),
+                week,
+                chrono::Weekday::Sun,
+            )
+            .unwrap();
             CareWeek {
                 week: week,
                 caretaker: caretaker.to_string(),
@@ -68,9 +92,12 @@ fn get_next_weeks(conf: Config, weeks: u32) -> Vec<CareWeek> {
 fn main() {
     match get_config(PATH) {
         Ok(conf) => {
-            let weeks = get_next_weeks(conf, 8);
+            let weeks = get_next_weeks(&conf, 8);
             for week in weeks {
-                println!("week #{} {} - {}: {}", week.week, week.start_date, week.end_date, week.caretaker);
+                println!(
+                    "week #{} {} - {}: {}",
+                    week.week, week.start_date, week.end_date, week.caretaker
+                );
             }
         }
         _ => panic!("Failed to open file"),
@@ -89,8 +116,8 @@ mod tests {
 
     #[test]
     fn get_current_caretaker_works() {
-        let schedule = get_config(PATH).unwrap();
-        let current_caretaker = get_current_caretaker(schedule.startweek, &schedule.caretakers);
-        assert!(schedule.caretakers.contains(&current_caretaker));
+        let config = get_config(PATH).unwrap();
+        let current_caretaker = get_current_caretaker(&config);
+        assert!(config.caretakers.contains(&current_caretaker));
     }
 }
