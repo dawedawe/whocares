@@ -1,4 +1,4 @@
-use chrono::Datelike;
+use chrono::prelude::*;
 use serde::Deserialize;
 use serde_json;
 use std::fs::File;
@@ -41,11 +41,16 @@ fn get_config(path: &str) -> io::Result<Config> {
 }
 
 fn get_current_caretaker_idx(conf: &Config) -> usize {
-    let weeknumberofstart = conf.startdate.iso_week().week();
-    let currentweeknumber = chrono::Local::now().iso_week().week();
+    let start = conf.startdate;
+    let current_date: chrono::NaiveDate = chrono::Local::now().date_naive();
 
-    let diff = currentweeknumber - weeknumberofstart;
-    let caretaker_idx = diff % conf.caretakers.len() as u32;
+    let diff = start
+        .iter_weeks()
+        .take_while(|w| w <= &current_date)
+        .count()
+        - 1;
+
+    let caretaker_idx = diff % conf.caretakers.len();
     caretaker_idx as usize
 }
 
@@ -55,11 +60,11 @@ fn get_current_caretaker(conf: &Config) -> String {
 }
 
 fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
-    let len = conf.caretakers.len();
+    let num_caretakers = conf.caretakers.len();
     let caretaker_idx = get_current_caretaker_idx(&conf);
     let mut caretaker_ordered = Vec::new();
     for i in caretaker_idx..(caretaker_idx + weeks as usize) {
-        let idx = i % len;
+        let idx = i % num_caretakers;
         caretaker_ordered.push(conf.caretakers.get(idx).unwrap());
     }
     let current_week_number = chrono::Local::now().iso_week().week();
