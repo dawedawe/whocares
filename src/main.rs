@@ -11,14 +11,14 @@ pub mod date_serializer {
     use serde::{de::Error, Deserialize, Deserializer};
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<NaiveDate, D::Error> {
-        let time: String = Deserialize::deserialize(deserializer)?;
-        Ok(NaiveDate::parse_from_str(&time, "%Y-%m-%d").map_err(D::Error::custom)?)
+        let s: String = Deserialize::deserialize(deserializer)?;
+        Ok(NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(D::Error::custom)?)
     }
 }
 
 #[derive(Deserialize)]
 struct Config {
-    #[serde(with = "date_serializer")] // declaring custom deserializer
+    #[serde(with = "date_serializer")]
     startdate: chrono::NaiveDate,
     caretakers: Vec<String>,
 }
@@ -60,35 +60,29 @@ fn get_current_caretaker(conf: &Config) -> String {
 }
 
 fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
-    let num_caretakers = conf.caretakers.len();
     let caretaker_idx = get_current_caretaker_idx(&conf);
-    let mut caretaker_ordered = Vec::new();
-    for i in caretaker_idx..(caretaker_idx + weeks as usize) {
-        let idx = i % num_caretakers;
-        caretaker_ordered.push(conf.caretakers.get(idx).unwrap());
-    }
-    let current_week_number = chrono::Local::now().iso_week().week();
-    caretaker_ordered
-        .iter()
-        .zip(current_week_number..)
-        .map(|(caretaker, week)| {
-            let start = chrono::NaiveDate::from_isoywd_opt(
-                chrono::Local::now().year(),
-                week,
-                chrono::Weekday::Mon,
-            )
-            .unwrap();
-            let end = chrono::NaiveDate::from_isoywd_opt(
-                chrono::Local::now().year(),
-                week,
-                chrono::Weekday::Sun,
-            )
-            .unwrap();
+    let num_caretakers = conf.caretakers.len();
+    let start_of_current_week = chrono::Local::now()
+        .date_naive()
+        .week(Weekday::Mon)
+        .first_day();
+
+    start_of_current_week
+        .iter_weeks()
+        .zip(caretaker_idx..(caretaker_idx + weeks as usize))
+        .map(|(d, i)| {
+            let week_number: u32 = d.iso_week().week();
+            let start_of_week = d;
+            let end_of_week = start_of_week
+                .checked_add_days(chrono::Days::new(6))
+                .unwrap();
+            let idx = i % num_caretakers;
+            let caretaker = conf.caretakers.get(idx).unwrap();
             CareWeek {
-                week: week,
-                caretaker: caretaker.to_string(),
-                start_date: start,
-                end_date: end,
+                week: week_number,
+                caretaker: caretaker.clone(),
+                start_date: start_of_week,
+                end_date: end_of_week,
             }
         })
         .collect::<Vec<CareWeek>>()
@@ -97,7 +91,7 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
 fn main() {
     match get_config(PATH) {
         Ok(conf) => {
-            let weeks = get_next_weeks(&conf, 8);
+            let weeks = get_next_weeks(&conf, 4);
             for week in weeks {
                 println!(
                     "week #{} {} - {}: {}",
@@ -124,5 +118,12 @@ mod tests {
         let config = get_config(PATH).unwrap();
         let current_caretaker = get_current_caretaker(&config);
         assert!(config.caretakers.contains(&current_caretaker));
+    }
+
+    #[test]
+    fn get_next_weeks_across_years_works() {
+        let config = get_config(PATH).unwrap();
+        let weeks = get_next_weeks(&config, 100);
+        assert!(weeks.len() == 100);
     }
 }
