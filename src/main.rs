@@ -1,6 +1,5 @@
 use chrono::prelude::*;
 use serde::Deserialize;
-use serde_json;
 use std::fs::File;
 use std::io::{self};
 
@@ -12,7 +11,7 @@ pub mod date_serializer {
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<NaiveDate, D::Error> {
         let s: String = Deserialize::deserialize(deserializer)?;
-        Ok(NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(D::Error::custom)?)
+        NaiveDate::parse_from_str(&s, "%Y-%m-%d").map_err(D::Error::custom)
     }
 }
 
@@ -50,17 +49,16 @@ fn get_current_caretaker_idx(conf: &Config) -> usize {
         .count()
         - 1;
 
-    let caretaker_idx = diff % conf.caretakers.len();
-    caretaker_idx as usize
+    diff % conf.caretakers.len()
 }
 
 fn get_current_caretaker(conf: &Config) -> String {
-    let caretaker_idx = get_current_caretaker_idx(&conf);
+    let caretaker_idx = get_current_caretaker_idx(conf);
     conf.caretakers.get(caretaker_idx).unwrap().to_string()
 }
 
 fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
-    let caretaker_idx = get_current_caretaker_idx(&conf);
+    let caretaker_idx = get_current_caretaker_idx(conf);
     let num_caretakers = conf.caretakers.len();
     let start_of_current_week = chrono::Local::now()
         .date_naive()
