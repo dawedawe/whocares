@@ -1,5 +1,6 @@
 use chrono::prelude::*;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self};
 use whocares::date_serializer;
@@ -11,6 +12,7 @@ struct Config {
     #[serde(with = "date_serializer")]
     startdate: chrono::NaiveDate,
     caretakers: Vec<String>,
+    reschedule: Vec<(u32, String)>,
 }
 
 struct CareWeek {
@@ -55,6 +57,7 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
         .date_naive()
         .week(Weekday::Mon)
         .first_day();
+    let rescheduled: HashMap<u32, String> = conf.reschedule.clone().into_iter().collect();
 
     start_of_current_week
         .iter_weeks()
@@ -65,8 +68,16 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
             let end_of_week = start_of_week
                 .checked_add_days(chrono::Days::new(6))
                 .unwrap();
-            let idx = i % num_caretakers;
-            let caretaker = conf.caretakers.get(idx).unwrap();
+
+            let caretaker = match rescheduled.get(&week_number) {
+                Some(rescheduled_caretaker) => rescheduled_caretaker,
+                None => {
+                    let idx = i % num_caretakers;
+                    let regular_caretaker = conf.caretakers.get(idx).unwrap();
+                    regular_caretaker
+                }
+            };
+
             CareWeek {
                 week: week_number,
                 caretaker: caretaker.clone(),

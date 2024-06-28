@@ -5,5 +5,9 @@
         "Edgar",
         "Florian",
         "Jimmy"
+    ],
+    "reschedule" : [
+        [26, "Edgar"],
+        [27, "dawe"]
     ]
 }
