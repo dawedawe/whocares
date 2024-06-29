@@ -106,11 +106,15 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::str::FromStr;
 
     #[test]
     fn deserialization_works() {
         let result = get_config(PATH);
         assert!(result.is_ok());
+        let config = result.unwrap();
+        assert!(config.caretakers.len() == 4);
+        assert!(config.startdate == NaiveDate::from_str("2024-05-27").unwrap());
     }
 
     #[test]
@@ -125,5 +129,25 @@ mod tests {
         let config = get_config(PATH).unwrap();
         let weeks = get_next_weeks(&config, 100);
         assert!(weeks.len() == 100);
+    }
+
+    #[test]
+    fn reschedule_works() {
+        let current_week = chrono::Local::now().date_naive().iso_week().week();
+        let config = Config {
+            caretakers: vec!["A".to_string(), "B".to_string(), "C".to_string()],
+            startdate: NaiveDate::from_str("2024-01-01").unwrap(),
+            reschedule: vec![
+                (current_week, "C".to_string()),
+                (current_week + 1, "A".to_string()),
+                (current_week + 2, "B".to_string()),
+            ],
+        };
+
+        let weeks = get_next_weeks(&config, 3);
+        assert!(weeks.len() == 3);
+        assert!(weeks[0].caretaker == "C");
+        assert!(weeks[1].caretaker == "A");
+        assert!(weeks[2].caretaker == "B");
     }
 }
