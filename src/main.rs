@@ -12,7 +12,7 @@ struct Config {
     #[serde(with = "date_serializer")]
     startdate: chrono::NaiveDate,
     caretakers: Vec<String>,
-    reschedule: Vec<(u32, String)>,
+    reschedule: HashMap<u32, String>,
 }
 
 struct CareWeek {
@@ -57,7 +57,6 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
         .date_naive()
         .week(Weekday::Mon)
         .first_day();
-    let rescheduled: HashMap<u32, String> = conf.reschedule.clone().into_iter().collect();
 
     start_of_current_week
         .iter_weeks()
@@ -69,7 +68,7 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
                 .checked_add_days(chrono::Days::new(6))
                 .unwrap();
 
-            let caretaker = match rescheduled.get(&week_number) {
+            let caretaker = match &conf.reschedule.get(&week_number) {
                 Some(rescheduled_caretaker) => rescheduled_caretaker,
                 None => {
                     let idx = i % num_caretakers;
@@ -137,11 +136,11 @@ mod tests {
         let config = Config {
             caretakers: vec!["A".to_string(), "B".to_string(), "C".to_string()],
             startdate: NaiveDate::from_str("2024-01-01").unwrap(),
-            reschedule: vec![
+            reschedule: HashMap::from([
                 (current_week, "C".to_string()),
                 (current_week + 1, "A".to_string()),
                 (current_week + 2, "B".to_string()),
-            ],
+            ]),
         };
 
         let weeks = get_next_weeks(&config, 3);
