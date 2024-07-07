@@ -13,7 +13,7 @@ struct Config {
     #[serde(with = "date_serializer")]
     startdate: chrono::NaiveDate,
     caretakers: Vec<String>,
-    reschedule: HashMap<u32, String>,
+    reschedule: HashMap<String, String>,
 }
 
 struct CareWeek {
@@ -69,14 +69,18 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
                 .checked_add_days(chrono::Days::new(6))
                 .unwrap();
 
-            let caretaker = match &conf.reschedule.get(&week_number) {
-                Some(rescheduled_caretaker) => rescheduled_caretaker,
-                None => {
-                    let idx = i % num_caretakers;
-                    let regular_caretaker = conf.caretakers.get(idx).unwrap();
-                    regular_caretaker
-                }
-            };
+            let caretaker =
+                match &conf
+                    .reschedule
+                    .get(&format!("{}-{}", d.year_ce().1, week_number))
+                {
+                    Some(rescheduled_caretaker) => rescheduled_caretaker,
+                    None => {
+                        let idx = i % num_caretakers;
+                        let regular_caretaker = conf.caretakers.get(idx).unwrap();
+                        regular_caretaker
+                    }
+                };
 
             CareWeek {
                 week: week_number,
@@ -145,20 +149,30 @@ mod tests {
     #[test]
     fn reschedule_works() {
         let current_week = chrono::Local::now().date_naive().iso_week().week();
+        let current_year = chrono::Local::now().date_naive().year_ce().1;
         let config = Config {
             caretakers: vec!["A".to_string(), "B".to_string(), "C".to_string()],
             startdate: NaiveDate::from_str("2024-01-01").unwrap(),
             reschedule: HashMap::from([
-                (current_week, "C".to_string()),
-                (current_week + 1, "A".to_string()),
-                (current_week + 2, "B".to_string()),
+                (
+                    format!("{}-{}", current_year, current_week),
+                    "C".to_string(),
+                ),
+                (
+                    format!("{}-{}", current_year, current_week + 1),
+                    "B".to_string(),
+                ),
+                (
+                    format!("{}-{}", current_year, current_week + 2),
+                    "A".to_string(),
+                ),
             ]),
         };
 
         let weeks = get_next_weeks(&config, 3);
         assert!(weeks.len() == 3);
         assert!(weeks[0].caretaker == "C");
-        assert!(weeks[1].caretaker == "A");
-        assert!(weeks[2].caretaker == "B");
+        assert!(weeks[1].caretaker == "B");
+        assert!(weeks[2].caretaker == "A");
     }
 }
