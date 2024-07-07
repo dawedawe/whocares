@@ -1,6 +1,7 @@
 use chrono::prelude::*;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::env;
 use std::fs::File;
 use std::io::{self};
 use whocares::date_serializer;
@@ -88,9 +89,20 @@ fn get_next_weeks(conf: &Config, weeks: u32) -> Vec<CareWeek> {
 }
 
 fn main() {
+    let weeks_to_preview = if env::args().len() == 2 {
+        let arg: Vec<String> = env::args().into_iter().collect();
+
+        match arg[1].parse::<u32>() {
+            Ok(n) => n,
+            Err(e) => panic!("{e}"),
+        }
+    } else {
+        4
+    };
+
     match get_config(PATH) {
         Ok(conf) => {
-            let weeks = get_next_weeks(&conf, 4);
+            let weeks = get_next_weeks(&conf, weeks_to_preview);
             for week in weeks {
                 println!(
                     "week #{} {} - {}: {}",
